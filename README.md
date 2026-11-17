@@ -1,98 +1,38 @@
-# Emotion Analysis via Parameter-Efficient Fine-Tuning (LoRA)
+# GoEmotions classification with DistilRoBERTa and LoRA
 
-Authors: Jiarui Zha, Linxuan Li
+Jiarui Zha and Linxuan Li
 
+We compared a frozen DistilRoBERTa encoder with a trained classification head against a rank-16 LoRA adapter and a trained classification head. The task is to predict any of the 28 GoEmotions labels for an English Reddit comment.
 
-# 📌 Project Overview
+## Test results
 
-This project explores the effectiveness of Parameter-Efficient Fine-Tuning (PEFT) for multi-label emotion classification. While Large Language Models (LLMs) are capable of general-purpose tasks, they are often computationally expensive and overqualified for specific classification problems.
+| Model | Micro-F1 | Macro-F1 |
+| --- | ---: | ---: |
+| [Frozen encoder baseline](DS_project_code.ipynb) | 0.3394 | 0.1245 |
+| [LoRA](LoRA_code.ipynb) | 0.5223 | 0.3811 |
 
-Our goal is to demonstrate that a small, distilled Encoder-only model (DistilRoBERTa), adapted via Low-Rank Adaptation (LoRA), can achieve competitive performance on complex emotion analysis tasks while training <1% of the total parameters.
+These are the outputs saved in the notebooks for the GoEmotions `simplified` test split of 5,427 examples. Both notebooks use the dataset's predefined train, validation and test splits and a sigmoid threshold of 0.5. The best checkpoints are selected by validation Macro-F1. The comparison measures LoRA against a frozen encoder, and the repo contains no full fine-tuning run.
 
-# 🚀 Key Features
+Micro-F1 pools predictions across labels. Macro-F1 averages per-label F1 with equal weight, giving rare labels the same weight as common ones.
 
-**Model Architecture**: DistilRoBERTa-base (Encoder-only).
+## Train and run inference
 
-**Fine-Tuning Method**: Low-Rank Adaptation (LoRA) to inject trainable rank-decomposition matrices into attention layers while freezing pretrained weights.
+```bash
+git clone https://github.com/LinxuanLi-DS/Fine-Tuning-with-DistilRoBERTa.git
+cd Fine-Tuning-with-DistilRoBERTa
+python -m pip install -r requirements.txt datasets scikit-learn tqdm jupyterlab
+python -m jupyterlab
+```
 
-**Task**: Multi-label classification (27 emotion categories + Neutral).
+Run [LoRA_code.ipynb](LoRA_code.ipynb) from the repository root. It downloads GoEmotions and DistilRoBERTa, trains the adapter and writes `best_LoRA_model.pt`. If training in Colab, copy that file to the repository root before running inference or building the Docker image. The checkpoint is generated locally.
 
-**Loss Function**: BCEWithLogitsLoss for independent probability estimation per class.
+```bash
+python lora_inference.py --model-path best_LoRA_model.pt --device cpu --text "I finally finished the project!"
+```
 
-# 📂 Dataset: GoEmotions
+For the FastAPI server and Docker setup, see the [deployment guide](deployment_guide.md).
 
-We utilize the GoEmotions dataset (Demszky et al., 2020), a corpus of 58k Reddit comments.
+## References
 
-**Labels**: 27 emotion categories (e.g., Admiration, Remorse, Joy) + Neutral.
-
-**Structure**: Multi-label (a single comment can express multiple emotions).
-
-**Preprocessing**: Subset of ~10,000 samples for efficiency.
-
-**Iterative Stratification**: Used to split data (Train 80% / Val 10% / Test 10%) while preserving the distribution of complex label combinations.
-
-# 🛠 Methodology
-
-1. Model Selection: Why DistilRoBERTa?
-
-Following architectural best practices, we utilize DistilRoBERTa (an encoder) instead of decoder-based models (like DistilGPT-2).
-
-**Bidirectional Attention**: Allows the model to access the full context of the comment simultaneously, which is crucial for understanding sentiment nuance.
-
-**Classification Head**: We replace the standard pooling layer with a custom classification head outputting 28 logits.
-
-2. Multi-Label Strategy
-
-Since emotions are not mutually exclusive, we treat this as 28 independent binary classification problems.
-
-**Activation**: Sigmoid (instead of Softmax). This allows high probabilities for multiple classes simultaneously.
-
-**Threshold**: Probabilities $> 0.5$ are converted to positive predictions.
-
-3. Evaluation Metrics
-
-To account for class imbalance and the multi-label nature of the data, we report:
-
-**Macro-F1 Score**: Averages the F1 score of each class independently. Treating rare classes (e.g., Grief) as equally important to common classes.
-
-**Micro-F1 Score**: Aggregates contributions of all classes. Useful for assessing global accuracy.
-
-📊 Baseline & Expected Results
-
-We compare our LoRA-adapted model against:
-
-**Zero-Shot Baseline**: Pretrained DistilRoBERTa without fine-tuning.
-
-**Full Fine-Tuning (Benchmark)**: Updating all 82M parameters (computationally expensive).
-
-**Target Metrics**:
-
-**F1-Score**: 80-85%
-
-**Parameter Efficiency**: Reduce trainable parameters by >98% compared to full fine-tuning.
-
-# 🔧 Installation & Usage
-
-# Clone the repository
-git clone [https://github.com/usp787/DS_5110_Final_Project_LoRA.git](https://github.com/usp787/DS_5110_Final_Project_LoRA.git)
-
-
-# Requirements:
-
-torch
-
-transformers
-
-peft (for LoRA implementation)
-
-scikit-learn (for iterative stratification and metrics)
-
-datasets
-
-# 📜 References
-
-**Dataset**: Demszky, D., et al. (2020). GoEmotions: A Dataset of Fine-Grained Emotions.
-
-**Method**: Hu, E. J., et al. (2021). LoRA: Low-Rank Adaptation of Large Language Models. arXiv:2106.09685v2.
-
-**Base Model**: Sanh, V., et al. (2019). DistilBERT, a distilled version of BERT: smaller, faster, cheaper and lighter.
+- [GoEmotions dataset paper](https://aclanthology.org/2020.acl-main.372/)
+- [LoRA paper](https://arxiv.org/abs/2106.09685)
